@@ -47,6 +47,21 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
   }
+
+  .grid-background {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .grid-background::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    background: linear-gradient(to right, #80808012 1px, transparent 1px),
+                linear-gradient(to bottom, #80808012 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
 }
 
 @layer base {
