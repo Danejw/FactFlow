@@ -93,7 +93,6 @@ export function VerificationResultsCard({ result, onReverify, pastResults }: Ver
                 <div className="flex justify-between items-center p-4">
                   {checkMarks && (
                     <div className="text-lg font-semibold">
-                      <h4 className="font-semibold">Verification Tally:</h4>
                       <p>{checkMarks}</p>
                     </div>
                   )}

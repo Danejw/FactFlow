@@ -7,11 +7,14 @@ import { useToast } from '@/components/ui/use-toast'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { OpenAI } from 'openai';
+import { VerificationResultsCard } from '@/components/VerificationResultsCard'; // Import the VerificationResultsCard
 
 export function LiveMonitor() {
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState("")
-  const [claims, setClaims] = useState<{ text: string; status: 'checking' | 'verified' | 'disputed'; sources?: string[] }[]>([])
+  const [claims, setClaims] = useState<{ text: string; verified: boolean }[]>([])
+  const [verificationResults, setVerificationResults] = useState<any[]>([]); // State to hold verification results
   const { toast } = useToast()
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
@@ -28,7 +31,7 @@ export function LiveMonitor() {
           const transcript = event.results[i][0].transcript
           if (event.results[i].isFinal) {
             finalTranscript += transcript
-            analyzeClaim(transcript)
+            setClaims(prev => [...prev, { text: transcript, verified: false }]);
           }
         }
         if (finalTranscript) {
@@ -55,22 +58,28 @@ export function LiveMonitor() {
   }, [])
 
   const analyzeClaim = async (text: string) => {
-    // Add the claim to the list immediately with "checking" status
-    setClaims(prev => [...prev, { text, status: 'checking' }])
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const audioFile = new Blob([/* audio data */]); // Replace with actual audio data
 
-    // Simulate AI analysis (replace with actual API call)
-    setTimeout(() => {
-      setClaims(prev => prev.map(claim => 
-        claim.text === text 
-          ? {
-              text,
-              status: Math.random() > 0.5 ? 'verified' : 'disputed',
-              sources: ['example.com/source1', 'example.com/source2']
-            }
-          : claim
-      ))
-    }, 2000)
-  }
+    try {
+      const response = await openai.audio.transcriptions.create({
+        model: "whisper-1",
+        file: audioFile,
+        response_format: "text"
+      });
+
+      const transcript = response.text; // Extract the transcript
+      const extractedClaims = extractClaims(transcript); // Function to extract claims from the transcript
+      setClaims(prev => [...prev, ...extractedClaims]); // Update claims state with extracted claims
+
+    } catch (error) {
+      console.error('Transcription error:', error);
+    }
+  };
+
+  const extractClaims = (transcript: string) => {
+    return transcript.split('.').map(claim => ({ text: claim.trim(), verified: false })).filter(claim => claim.text);
+  };
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
@@ -98,6 +107,43 @@ export function LiveMonitor() {
       })
     }
   }
+
+  const handleVerifyClaim = async (claimText: string) => {
+    console.log(`Verifying claim: ${claimText}`);
+    
+    // Call the verification API
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: `Please verify this claim: "${claimText}"`
+          }
+        ],
+        temperature: 0.1,
+      });
+
+      const result = response.choices[0].message.content;
+      const parsedResult = JSON.parse(result); // Assuming the response is in JSON format
+      setVerificationResults(prev => [parsedResult, ...prev]); // Add the result to the verification results state at the top
+
+      // Update the claim's verification status
+      setClaims(prev => prev.map(claim => 
+        claim.text === claimText ? { ...claim, verified: true } : claim
+      ));
+      
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast({
+        title: "Verification Error",
+        description: "There was an error verifying the claim. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl space-y-4">
@@ -141,20 +187,14 @@ export function LiveMonitor() {
               <Card key={index} className="p-3">
                 <p className="text-sm mb-2">{claim.text}</p>
                 <div className="flex items-center gap-2">
-                  {claim.status === 'checking' ? (
+                  <Button onClick={() => handleVerifyClaim(claim.text)} disabled={claim.verified} className="bg-blue-600 text-white">
+                    {claim.verified ? 'Verified' : 'Verify Claim'}
+                  </Button>
+                  {!claim.verified && (
                     <Badge variant="secondary" className="gap-1">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Checking
                     </Badge>
-                  ) : claim.status === 'verified' ? (
-                    <Badge variant="success" className="bg-green-500">Verified</Badge>
-                  ) : (
-                    <Badge variant="destructive">Disputed</Badge>
-                  )}
-                  {claim.sources && (
-                    <span className="text-xs text-muted-foreground">
-                      Sources: {claim.sources.join(', ')}
-                    </span>
                   )}
                 </div>
               </Card>
@@ -162,6 +202,15 @@ export function LiveMonitor() {
           </div>
         </ScrollArea>
       </Card>
+
+      {/* Render Verification Results */}
+      {verificationResults.length > 0 && (
+        <div className="space-y-4">
+          {verificationResults.map((result, index) => (
+            <VerificationResultsCard key={index} result={result} onReverify={() => handleVerifyClaim(result.claim)} pastResults={verificationResults} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
