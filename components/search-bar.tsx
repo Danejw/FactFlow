@@ -1,44 +1,39 @@
 "use client"
 
-import { useState } from 'react'
-import { Search, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/use-toast'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useState } from 'react';
+import { Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/use-toast';
+import { VerificationResultsCard } from '@/components/VerificationResultsCard';
 
 interface VerificationResult {
   verdict: string;
   explanation: string;
   sources: string[];
+  claim: string; // Added to hold the claim
 }
 
 export function SearchBar() {
-  const [claim, setClaim] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<VerificationResult | null>(null)
-  const { toast } = useToast()
+  const [claim, setClaim] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [pastResults, setPastResults] = useState<VerificationResult[]>([]);
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!claim.trim()) {
       toast({
         title: "Please enter a claim",
         description: "Enter a statement or claim you'd like to verify.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsLoading(true)
-    setResult(null)
+    setIsLoading(true);
+    setResult(null);
 
     try {
       const response = await fetch('/api/verify', {
@@ -47,37 +42,42 @@ export function SearchBar() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ claim }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Verification failed')
+        throw new Error('Verification failed');
       }
 
-      const data = await response.json()
-      setResult(data)
+      const data = await response.json();
+      setResult({ ...data, claim }); // Include the claim in the result
+      setPastResults(prev => [{ ...data, claim }, ...prev]); // Store the new result in history
     } catch (error) {
       toast({
         title: "Verification failed",
         description: "There was an error verifying your claim. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const getVerdictColor = (verdict: string) => {
-    switch (verdict?.toUpperCase()) {
-      case 'TRUE':
-        return 'bg-green-500/10 text-green-700 dark:text-green-400';
-      case 'FALSE':
-        return 'bg-red-500/10 text-red-700 dark:text-red-400';
-      case 'PARTIALLY TRUE':
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
-      default:
-        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
+  const reverify = async () => {
+    if (!result) return null;
+    const response = await fetch('/api/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ claim: result.claim }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Re-verification failed');
     }
-  }
+
+    return await response.json();
+  };
 
   return (
     <div className="space-y-4">
@@ -105,35 +105,12 @@ export function SearchBar() {
       </form>
 
       {result && (
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Verification Result
-              <Badge variant="secondary" className={getVerdictColor(result.verdict)}>
-                {result.verdict}
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Here's what our AI found about your claim
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {result.explanation}
-            </p>
-            {result.sources && result.sources.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold">Sources:</h4>
-                <ul className="text-sm text-muted-foreground list-disc pl-4">
-                  {result.sources.map((source, index) => (
-                    <li key={index}>{source}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <VerificationResultsCard 
+          result={result} 
+          onReverify={reverify} 
+          pastResults={pastResults} 
+        />
       )}
     </div>
-  )
+  );
 }
