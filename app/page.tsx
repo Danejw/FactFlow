@@ -51,6 +51,8 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-primary/5 via-background to-background"></div>
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_500px_at_50%_400px,#3b82f610,transparent)]"></div>
         <section className="relative space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32">
           <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
           <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center">
@@ -119,6 +121,7 @@ export default function Home() {
         </section>
 
         <section className="relative border-t bg-background/80">
+        
           <div className="absolute inset-0 -z-10 bg-[linear-gradient(45deg,#80808008_1px,transparent_1px),linear-gradient(-45deg,#80808008_1px,transparent_1px)] bg-[size:32px_32px]"></div>
           <div className="absolute inset-0 -z-10 bg-gradient-to-b from-white/30 via-white/0 to-white/30 dark:from-white/[0.05] dark:via-transparent dark:to-white/[0.05]"></div>
           <div className="container py-8 md:py-12 lg:py-24">
@@ -221,7 +224,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="relative border-t bg-background/80">
+        <section className="relative border-t bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]">
           <div className="absolute inset-0 -z-10 bg-gradient-to-br from-primary/5 via-background to-background"></div>
           <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_500px_at_50%_400px,#3b82f610,transparent)]"></div>
           <div className="container py-12 md:py-16 lg:py-20">

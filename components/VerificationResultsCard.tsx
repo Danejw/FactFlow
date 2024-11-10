@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel'; // Assuming you have a carousel component
+import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel'; // Ensure these are correctly imported
 
 interface VerificationResult {
   verdict: string;
@@ -60,49 +60,47 @@ export function VerificationResultsCard({ result, onReverify, pastResults }: Ver
     <div className="space-y-4">
       <Carousel>
         <CarouselContent>
-          {newResults.map((res, index) => (
-            <CarouselItem key={index}>
-              <Card className="w-full shadow-lg rounded-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Verification Result
-                    <Badge variant="secondary" className={getVerdictColor(res.verdict)}>
-                      {res.verdict}
-                    </Badge>
-                    {emoji && <span className="text-xl">{emoji}</span>} {/* Display emoji if applicable */}
-                  </CardTitle>
-                  <CardDescription>
-                    <p>Claim: {res.claim}</p>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    {res.explanation}
-                  </p>
-                  {res.sources && res.sources.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-semibold">Sources:</h4>
-                      <ul className="text-sm text-muted-foreground list-disc pl-4">
-                        {res.sources.map((source, index) => (
-                          <li key={index}>{source}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </CardContent>
-                <div className="flex justify-between items-center p-4">
-                  {checkMarks && (
-                    <div className="text-lg font-semibold">
-                      <p>{checkMarks}</p>
-                    </div>
-                  )}
-                  <Button onClick={handleReverify} disabled={isRechecking} className="bg-blue-600 text-white">
-                    {isRechecking ? 'Rechecking...' : 'Double-Check'}
-                  </Button>
-                </div>
-              </Card>
-            </CarouselItem>
-          ))}
+          <CarouselItem>
+            <Card className="w-full shadow-lg rounded-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Verification Result
+                  <Badge variant="secondary" className={getVerdictColor(result.verdict)}>
+                    {result.verdict}
+                  </Badge>
+                  {emoji && <span className="text-xl">{emoji}</span>} {/* Display emoji if applicable */}
+                </CardTitle>
+                <CardDescription>
+                  <p>Claim: {result.claim}</p> {/* Ensure the claim is displayed */}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  {result.explanation}
+                </p>
+                {result.sources && result.sources.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Sources:</h4>
+                    <ul className="text-sm text-muted-foreground list-disc pl-4">
+                      {result.sources.map((source, index) => (
+                        <li key={index}>{source}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+              <div className="flex justify-between items-center p-4">
+                {checkMarks && (
+                  <div className="text-lg font-semibold">
+                    <p>{checkMarks}</p>
+                  </div>
+                )}
+                <Button onClick={handleReverify} disabled={isRechecking} className="bg-blue-600 text-white">
+                  {isRechecking ? 'Rechecking...' : 'Double-Check'}
+                </Button>
+              </div>
+            </Card>
+          </CarouselItem>
         </CarouselContent>
       </Carousel>
     </div>

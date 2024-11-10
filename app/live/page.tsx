@@ -37,6 +37,21 @@ export default function LivePage() {
             </p>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
+            <div className="p-4 border rounded-lg shadow-md">
+              <h2 className="font-semibold text-lg">Claim 1</h2>
+              <p className="text-sm text-muted-foreground">Description of Claim 1.</p>
+            </div>
+            <div className="p-4 border rounded-lg shadow-md">
+              <h2 className="font-semibold text-lg">Claim 2</h2>
+              <p className="text-sm text-muted-foreground">Description of Claim 2.</p>
+            </div>
+            <div className="p-4 border rounded-lg shadow-md">
+              <h2 className="font-semibold text-lg">Claim 3</h2>
+              <p className="text-sm text-muted-foreground">Description of Claim 3.</p>
+            </div>
+          </div>
+
           <div className="w-full max-w-4xl">
             <LiveMonitor />
           </div>

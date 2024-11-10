@@ -7,18 +7,47 @@ import { useToast } from '@/components/ui/use-toast'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { OpenAI } from 'openai';
-import { VerificationResultsCard } from '@/components/VerificationResultsCard'; // Import the VerificationResultsCard
+import { VerificationResultsCard } from '@/components/VerificationResultsCard';
 
 export function LiveMonitor() {
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState("")
   const [claims, setClaims] = useState<{ text: string; verified: boolean }[]>([])
-  const [verificationResults, setVerificationResults] = useState<any[]>([]); // State to hold verification results
+  const [verificationResults, setVerificationResults] = useState<any[]>([]);
+  const [extractedClaims, setExtractedClaims] = useState<string[]>([]); // State to hold claims extracted from the transcript
   const { toast } = useToast()
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const [audioSources, setAudioSources] = useState<MediaDeviceInfo[]>([]); // State to hold audio sources
+  const [selectedSource, setSelectedSource] = useState<string>(''); // State to hold selected audio source
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]); // State to hold output devices
+  const [selectedOutput, setSelectedOutput] = useState<string>(''); // State to hold selected output device
+  const audioContextRef = useRef<AudioContext | null>(null); // Ref to hold the audio context
+  const mediaStreamRef = useRef<MediaStream | null>(null); // Ref to hold the media stream
 
   useEffect(() => {
+    // Fetch audio input devices
+    const fetchAudioSources = async () => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      setAudioSources(audioInputs);
+      if (audioInputs.length > 0) {
+        setSelectedSource(audioInputs[0].deviceId); // Set default to the first audio input
+      }
+    };
+
+    // Fetch audio output devices
+    const fetchOutputDevices = async () => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+      setOutputDevices(audioOutputs);
+      if (audioOutputs.length > 0) {
+        setSelectedOutput(audioOutputs[0].deviceId); // Set default to the first audio output
+      }
+    };
+
+    fetchAudioSources();
+    fetchOutputDevices();
+
     if (typeof window !== 'undefined' && 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       recognitionRef.current = new SpeechRecognition()
@@ -54,34 +83,16 @@ export function LiveMonitor() {
       if (recognitionRef.current) {
         recognitionRef.current.stop()
       }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     }
   }, [])
 
-  const analyzeClaim = async (text: string) => {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const audioFile = new Blob([/* audio data */]); // Replace with actual audio data
-
-    try {
-      const response = await openai.audio.transcriptions.create({
-        model: "whisper-1",
-        file: audioFile,
-        response_format: "text"
-      });
-
-      const transcript = response.text; // Extract the transcript
-      const extractedClaims = extractClaims(transcript); // Function to extract claims from the transcript
-      setClaims(prev => [...prev, ...extractedClaims]); // Update claims state with extracted claims
-
-    } catch (error) {
-      console.error('Transcription error:', error);
-    }
-  };
-
-  const extractClaims = (transcript: string) => {
-    return transcript.split('.').map(claim => ({ text: claim.trim(), verified: false })).filter(claim => claim.text);
-  };
-
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (!recognitionRef.current) {
       toast({
         title: "Not supported",
@@ -92,54 +103,112 @@ export function LiveMonitor() {
     }
 
     if (isListening) {
+      // Stop speech recognition and media stream
       recognitionRef.current.stop()
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
       setIsListening(false)
       toast({
         title: "Monitoring stopped",
         description: "Live fact-checking has been stopped.",
       })
     } else {
-      recognitionRef.current.start()
-      setIsListening(true)
-      toast({
-        title: "Monitoring started",
-        description: "Live fact-checking is now active.",
-      })
+      try {
+        // Get the selected audio input stream
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: selectedSource ? { exact: selectedSource } : undefined }
+        });
+
+        // Create an audio context
+        audioContextRef.current = new AudioContext();
+        const source = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
+        
+        // Connect the source to the output device
+        const destination = audioContextRef.current.createMediaStreamDestination();
+        source.connect(destination);
+        
+        // Set the output device
+        const audioElement = new Audio();
+        audioElement.srcObject = destination.stream;
+        await audioElement.setSinkId(selectedOutput); // Set the output device
+        audioElement.play();
+
+        // Start speech recognition
+        recognitionRef.current.start();
+        setIsListening(true);
+        toast({
+          title: "Monitoring started",
+          description: "Live fact-checking is now active.",
+        });
+      } catch (error) {
+        console.error('Error accessing audio devices:', error);
+        toast({
+          title: "Error",
+          description: "Could not access audio devices. Please check your permissions.",
+          variant: "destructive",
+        });
+      }
     }
   }
 
   const handleVerifyClaim = async (claimText: string) => {
-    console.log(`Verifying claim: ${claimText}`);
-    
-    // Call the verification API
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "user",
-            content: `Please verify this claim: "${claimText}"`
-          }
-        ],
-        temperature: 0.1,
+    // Call the verification API with the claim
+    const response = await fetch('/api/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ claim: claimText }),
+    });
+
+    if (!response.ok) {
+      toast({
+        title: "Verification failed",
+        description: "There was an error verifying the claim. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const result = await response.json();
+    setVerificationResults(prev => [...prev, { ...result, claim: claimText }]); // Add the verification result to the state
+  };
+
+  const handleCaptureClaim = async () => {
+    if (transcript.trim()) {
+      // Call OpenAI API to extract claims from the transcript
+      const response = await fetch('/api/extract-claims', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript: transcript.trim() }),
       });
 
-      const result = response.choices[0].message.content;
-      const parsedResult = JSON.parse(result); // Assuming the response is in JSON format
-      setVerificationResults(prev => [parsedResult, ...prev]); // Add the result to the verification results state at the top
+      if (!response.ok) {
+        toast({
+          title: "Error extracting claims",
+          description: "Failed to extract claims from the transcript.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      // Update the claim's verification status
-      setClaims(prev => prev.map(claim => 
-        claim.text === claimText ? { ...claim, verified: true } : claim
-      ));
-      
-    } catch (error) {
-      console.error('Verification error:', error);
+      const data = await response.json();
+      console.log("Extracted Claims:", data.claims); // Debugging line to check claims
+      setExtractedClaims(data.claims); // Set the extracted claims
+
+      // Optionally, you can also verify the first claim immediately
+      if (data.claims.length > 0) {
+        handleVerifyClaim(data.claims[0]); // Verify the first extracted claim
+      }
+
+      setTranscript(""); // Clear the transcript after capturing
+    } else {
       toast({
-        title: "Verification Error",
-        description: "There was an error verifying the claim. Please try again.",
+        title: "No transcript available",
+        description: "Please speak something to capture a claim.",
         variant: "destructive",
       });
     }
@@ -172,36 +241,64 @@ export function LiveMonitor() {
         )}
       </div>
 
+      {/* Audio Source Selection */}
+      <div className="flex items-center">
+        <label htmlFor="audio-source" className="mr-2">Select Audio Source:</label>
+        <select
+          id="audio-source"
+          value={selectedSource}
+          onChange={(e) => setSelectedSource(e.target.value)}
+          className="border rounded p-2"
+        >
+          {audioSources.map(source => (
+            <option key={source.deviceId} value={source.deviceId}>
+              {source.label || `Microphone ${source.deviceId}`}
+            </option>
+          ))}
+          <option value="system-audio">System Audio</option>
+        </select>
+      </div>
+
+      {/* Output Device Selection */}
+      <div className="flex items-center">
+        <label htmlFor="output-device" className="mr-2">Select Output Device:</label>
+        <select
+          id="output-device"
+          value={selectedOutput}
+          onChange={(e) => setSelectedOutput(e.target.value)}
+          className="border rounded p-2"
+        >
+          {outputDevices.map(device => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {device.label || `Output ${device.deviceId}`}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <Card className="p-4">
         <h3 className="font-semibold mb-2">Live Transcript</h3>
         <ScrollArea className="h-[100px] rounded-md border p-2">
           <p className="text-sm text-muted-foreground">{transcript || "Transcript will appear here..."}</p>
         </ScrollArea>
+        <Button onClick={handleCaptureClaim} className="mt-2">
+          Verify Current Transcript
+        </Button>
       </Card>
 
-      <Card className="p-4">
-        <h3 className="font-semibold mb-2">Fact-Check Results</h3>
-        <ScrollArea className="h-[200px]">
-          <div className="space-y-3">
-            {claims.map((claim, index) => (
-              <Card key={index} className="p-3">
-                <p className="text-sm mb-2">{claim.text}</p>
-                <div className="flex items-center gap-2">
-                  <Button onClick={() => handleVerifyClaim(claim.text)} disabled={claim.verified} className="bg-blue-600 text-white">
-                    {claim.verified ? 'Verified' : 'Verify Claim'}
-                  </Button>
-                  {!claim.verified && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Checking
-                    </Badge>
-                  )}
-                </div>
-              </Card>
+      {/* Display Extracted Claims */}
+      {extractedClaims.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="font-semibold">Extracted Claims</h3>
+          <ul className="list-disc pl-5">
+            {extractedClaims.map((claim, index) => (
+              <li key={index} className="text-sm text-muted-foreground">
+                {claim}
+              </li>
             ))}
-          </div>
-        </ScrollArea>
-      </Card>
+          </ul>
+        </div>
+      )}
 
       {/* Render Verification Results */}
       {verificationResults.length > 0 && (
